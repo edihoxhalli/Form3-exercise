@@ -3,6 +3,12 @@
 // more information about fields.
 package account
 
+const Url string = "http://localhost:8080/v1/organisation/accounts"
+
+type Account struct {
+	Data *AccountData `json:"data,omitempty"`
+}
+
 type AccountData struct {
 	Attributes     *AccountAttributes `json:"attributes,omitempty"`
 	ID             string             `json:"id,omitempty"`
