@@ -1,0 +1,14 @@
+SELECT 
+   table_name, 
+   column_name, 
+   data_type 
+FROM 
+   information_schema.columns
+WHERE 
+   table_name = 'Account';
+
+interview_accountapi=> SELECT * FROM "Account";
+                  id                  |           organisation_id            | version | is_deleted | is_locked |        created_on         |        modified_on        |                                                                                                                                                                                                          record                                                                                                                                                                                                           | pagination_id 
+--------------------------------------+--------------------------------------+---------+------------+-----------+---------------------------+---------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------------
+ ad27e265-9605-4b4b-a0e5-3003ea9cc4dc | eb0bd6f5-c3f5-44b2-b677-acd23cdde73c |       0 | f          | f         | 2022-06-01 10:57:19.98565 | 2022-06-01 10:57:19.98565 | {"bic": "NWBKGB22", "iban": "GB11NWBK40030041426819", "name": ["Samantha Holder"], "status": "confirmed", "bank_id": "400300", "country": "GB", "bank_id_code": "GBDSC", "base_currency": "GBP", "joint_account": false, "account_number": "41426819", "account_classification": "Personal", "account_matching_opt_out": false, "secondary_identification": "A1B2C3D4", "alternative_bank_account_names": ["Sam Holder"]} |             1
+(1 row)

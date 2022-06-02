@@ -5,6 +5,12 @@ package account
 
 const Url string = "http://localhost:8080/v1/organisation/accounts"
 
+type AccountApiResponse struct {
+	ResponseBody *Account `json:"response_body,omitempty"`
+	StatusCode   *int     `json:"status_code,omitempty"`
+	Status       *string  `json:"status,omitempty"`
+}
+
 type Account struct {
 	Data *AccountData `json:"data,omitempty"`
 }

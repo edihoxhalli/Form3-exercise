@@ -13,7 +13,9 @@ const DIR = "./account/data/"
 
 func main() {
 	ac := readFile("sample-account.json")
-	fmt.Printf("%#v", account.CreateAccount(ac))
+	apiResponse := account.CreateAccount(ac)
+	apiRespJson, _ := json.MarshalIndent(apiResponse, "", "  ")
+	fmt.Printf("%s\n", apiRespJson)
 }
 
 func readFile(name string) account.Account {

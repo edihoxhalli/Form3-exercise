@@ -7,20 +7,27 @@ import (
 	"net/http"
 )
 
-func CreateAccount(acc Account) Account {
+func CreateAccount(acc Account) AccountApiResponse {
 	accJson, err := json.Marshal(acc)
 	check(err)
 	requestBody := bytes.NewBuffer(accJson)
 
-	resp, err := http.Post(Url, "application/json", requestBody)
+	response, err := http.Post(Url, "application/json", requestBody)
 	check(err)
-	defer resp.Body.Close()
-	var newAccByte []byte
-	newAccByte, err = ioutil.ReadAll(resp.Body)
-	check(err)
-	var newAccStruct Account
-	check(json.Unmarshal(newAccByte, &newAccStruct))
-	return newAccStruct
+
+	defer response.Body.Close()
+	var responseWrapper AccountApiResponse
+	responseWrapper.Status = &response.Status
+	responseWrapper.StatusCode = &response.StatusCode
+	if response.StatusCode < 400 {
+		var newAccByte []byte
+		newAccByte, err = ioutil.ReadAll(response.Body)
+		check(err)
+		var newAccStruct Account
+		check(json.Unmarshal(newAccByte, &newAccStruct))
+		responseWrapper.ResponseBody = &newAccStruct
+	}
+	return responseWrapper
 }
 
 func check(err error) {
