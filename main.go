@@ -13,7 +13,8 @@ const DIR = "./account/data/"
 
 func main() {
 	ac := readFile("sample-account.json")
-	apiResponse := account.CreateAccount(ac)
+	apiResponse, err := account.CreateAccount(ac)
+	account.Check(err)
 	apiRespJson, _ := json.MarshalIndent(apiResponse, "", "  ")
 	fmt.Printf("%s\n", apiRespJson)
 }

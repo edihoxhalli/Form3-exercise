@@ -3,35 +3,42 @@ package account
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 )
 
-func CreateAccount(acc Account) AccountApiResponse {
-	accJson, err := json.Marshal(acc)
-	check(err)
-	requestBody := bytes.NewBuffer(accJson)
+var client *http.Client
 
-	response, err := http.Post(Url, "application/json", requestBody)
-	check(err)
+func init() {
+	client = http.DefaultClient
+}
 
+func CreateAccount(acc Account) (*AccountApiResponse, error) {
+	accountJSON, err := json.Marshal(acc)
+	Check(err)
+
+	request := Client(CREATE)
+	request.Header.Add("Content-Type", "application/vnd.api+json")
+	request.Header.Add("Content-Length", strconv.Itoa(len([]byte(accountJSON))))
+	request.Body = ioutil.NopCloser(bytes.NewReader(accountJSON))
+	response, err := client.Do(request)
+	Check(err)
 	defer response.Body.Close()
+
 	var responseWrapper AccountApiResponse
 	responseWrapper.Status = &response.Status
 	responseWrapper.StatusCode = &response.StatusCode
-	if response.StatusCode < 400 {
-		var newAccByte []byte
-		newAccByte, err = ioutil.ReadAll(response.Body)
-		check(err)
-		var newAccStruct Account
-		check(json.Unmarshal(newAccByte, &newAccStruct))
-		responseWrapper.ResponseBody = &newAccStruct
-	}
-	return responseWrapper
-}
 
-func check(err error) {
-	if err != nil {
-		panic(err)
+	responseBody, err := ioutil.ReadAll(response.Body)
+	Check(err)
+	if response.StatusCode < 400 {
+		var createdAccount Account
+		Check(json.Unmarshal(responseBody, &createdAccount))
+		responseWrapper.ResponseBody = &createdAccount
+		return &responseWrapper, nil
+	} else {
+		return nil, errors.New(string(responseBody))
 	}
 }
