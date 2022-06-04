@@ -13,7 +13,7 @@ func CreateAccount(acc Account) (*AccountApiResponse, error) {
 	accountJSON, err := json.Marshal(acc)
 	Check(err)
 
-	request := NewRequestWithHeaders(CREATE, uuid.Nil)
+	request := NewRequestWithHeaders(CREATE, uuid.Nil, nil)
 	request.Header.Add("Content-Type", "application/vnd.api+json")
 	request.Header.Add("Content-Length", strconv.Itoa(len([]byte(accountJSON))))
 

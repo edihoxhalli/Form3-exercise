@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,17 +34,22 @@ func (index Verb) String() string {
 	return [...]string{"POST", "GET", "DELETE"}[index]
 }
 
-func NewRequestWithHeaders(verb Verb, id uuid.UUID) *http.Request {
-	req, err := http.NewRequest(verb.String(), endpointString(id), nil)
+func NewRequestWithHeaders(verb Verb, id uuid.UUID, version *int64) *http.Request {
+	req, err := http.NewRequest(verb.String(), endpointString(verb, id), nil)
 	Check(err)
-
 	req.Header.Add("Host", "localhost:8080")
 	req.Header.Add("Date", time.Now().String())
 	req.Header.Add("Accept", "application/vnd.api+json")
+
+	if verb == DELETE {
+		q := req.URL.Query()
+		q.Add("version", strconv.Itoa(int(*version)))
+		req.URL.RawQuery = q.Encode()
+	}
 	return req
 }
 
-func endpointString(id uuid.UUID) string {
+func endpointString(verb Verb, id uuid.UUID) string {
 	if id == uuid.Nil {
 		return Url
 	} else {
@@ -73,12 +81,14 @@ func HandleResponse(response *http.Response, verb Verb) (*AccountApiResponse, er
 			responseWrapper.ResponseBody = &fetchedAccount
 			return &responseWrapper, nil
 		case DELETE:
-			return nil, errors.New("NOT IMPLEMENTED YET")
+			return nil, nil
 		default:
 			return nil, errors.New("UNHANDLED HTTP VERB")
 		}
 	} else {
-		return nil, errors.New(string(responseBody))
+		err = errors.New(string(responseBody))
+		FatalApiError(err, response)
+		return nil, err
 	}
 }
 
@@ -86,4 +96,11 @@ func Check(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func FatalApiError(err error, resp *http.Response) {
+	l := log.New(os.Stderr, "", 1)
+	l.Println("API RESPONSE ERROR")
+	l.Printf("Response Body : %#v\n", resp.Body)
+	l.Fatalf("Status Code : %d, Status : %s", resp.StatusCode, resp.Status)
 }

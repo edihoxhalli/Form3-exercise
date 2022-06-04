@@ -4,8 +4,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func Fetch(id uuid.UUID) (*AccountApiResponse, error) {
-	req := NewRequestWithHeaders(FETCH, id)
+func FetchAccount(id uuid.UUID) (*AccountApiResponse, error) {
+	req := NewRequestWithHeaders(FETCH, id, nil)
 	response, err := ApiClient.Do(req)
 
 	Check(err)
