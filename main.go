@@ -7,16 +7,30 @@ import (
 	"strings"
 
 	"github.com/ehox/form3/account"
+	"github.com/google/uuid"
 )
 
 const DIR = "./account/data/"
 
 func main() {
 	ac := readFile("sample-account.json")
-	apiResponse, err := account.CreateAccount(ac)
-	account.Check(err)
-	apiRespJson, _ := json.MarshalIndent(apiResponse, "", "  ")
-	fmt.Printf("%s\n", apiRespJson)
+	var ids []string
+	for i := 1; i < 4; i++ {
+		ac.Data.ID = uuid.New().String()
+		apiResponse, err := account.CreateAccount(ac)
+		ids = append(ids, ac.Data.ID)
+
+		account.Check(err)
+		apiRespJson, _ := json.MarshalIndent(apiResponse, "", "  ")
+		fmt.Printf("%s\n%s\n", "Created the following account: ", apiRespJson)
+	}
+
+	for _, id := range ids {
+		apiResponse, err := account.Fetch(uuid.MustParse(id))
+		account.Check(err)
+		apiRespJson, _ := json.MarshalIndent(apiResponse, "", "  ")
+		fmt.Printf("%s\n%s\n", "Fetched the following account: ", apiRespJson)
+	}
 }
 
 func readFile(name string) account.Account {
