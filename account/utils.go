@@ -7,13 +7,15 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-const Url string = "http://localhost:8080/v1/organisation/accounts"
+var Host string
+var ApiVersion string
+
+const AccountsEndpoint string = "organisation/accounts"
 
 type Verb int
 
@@ -21,18 +23,20 @@ const (
 	CREATE Verb = iota
 	FETCH
 	DELETE
-)
-
-const (
-	API_ERROR_FORMATTING         = "ACCOUNT API ERROR\nSTATUS CODE : %d\nSTATUS : %s\nRESPONSE BODY : %s\nMESSAGE : %s"
-	DELETE_INCORRECT_STATUS_CODE = "DELETE OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
-	ERROR_STATUS_CODE            = "GOT ERROR STATUS CODE OF %d\n, STATUS %s"
+	API_ERROR_FORMATTING           = "ACCOUNT API ERROR\nSTATUS CODE : %d\nSTATUS : %s\nRESPONSE BODY : %s\nMESSAGE : %s"
+	DELETE_INCORRECT_STATUS_CODE   = "DELETE OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
+	CREATE_INCORRECT_STATUS_CODE   = "CREATE OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
+	FETCH_INCORRECT_STATUS_CODE    = "FETCH OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
+	ERROR_STATUS_CODE              = "GOT ERROR STATUS CODE OF %d, STATUS %s"
+	CREATE_OR_FETCH_INCORRECT_VERB = "HANDLE CREATE OR FETCH FUNCTION CALLED WITH INCORRECT HTTP VERB"
 )
 
 var ApiClient *http.Client
 
 func init() {
-	ApiClient = http.DefaultClient
+	ApiClient = &http.Client{}
+	Host = "http://localhost:8080/"
+	ApiVersion = "v1/"
 }
 
 func (index Verb) String() string {
@@ -40,9 +44,9 @@ func (index Verb) String() string {
 }
 
 func newRequestWithHeaders(verb Verb, id uuid.UUID, version *int64) *http.Request {
-	req, err := http.NewRequest(verb.String(), endpointString(verb, id), nil)
+	req, err := http.NewRequest(verb.String(), endpointString(id), nil)
 	check(err)
-	req.Header.Add("Host", "localhost:8080")
+	req.Header.Add("Host", Host)
 	req.Header.Add("Date", time.Now().String())
 	req.Header.Add("Accept", "application/vnd.api+json")
 
@@ -54,15 +58,12 @@ func newRequestWithHeaders(verb Verb, id uuid.UUID, version *int64) *http.Reques
 	return req
 }
 
-func endpointString(verb Verb, id uuid.UUID) string {
+func endpointString(id uuid.UUID) string {
+	finalEndpoint := Host + ApiVersion + AccountsEndpoint
 	if id == uuid.Nil {
-		return Url
+		return finalEndpoint
 	} else {
-		var sb strings.Builder
-		sb.WriteString(Url)
-		sb.WriteString("/")
-		sb.WriteString(id.String())
-		return sb.String()
+		return finalEndpoint + "/" + id.String()
 	}
 }
 
@@ -73,7 +74,7 @@ func handleResponse(response *http.Response, verb Verb) (*AccountApiResponse, er
 
 	responseBody, err := ioutil.ReadAll(response.Body)
 	check(err)
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusBadRequest {
+	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusBadRequest {
 		switch verb {
 		case CREATE, FETCH:
 			return handleCreateOrFetchResponse(responseBody, responseWrapper, verb)
@@ -93,15 +94,15 @@ func handleCreateOrFetchResponse(responseBody []byte, responseWrapper AccountApi
 	case CREATE:
 		if *responseWrapper.StatusCode != http.StatusCreated {
 			return nil, &ApiError{*responseWrapper.StatusCode, *responseWrapper.Status, string(responseBody),
-				fmt.Sprintf(DELETE_INCORRECT_STATUS_CODE, http.StatusNoContent, *responseWrapper.StatusCode)}
+				fmt.Sprintf(CREATE_INCORRECT_STATUS_CODE, http.StatusCreated, *responseWrapper.StatusCode)}
 		}
 	case FETCH:
 		if *responseWrapper.StatusCode != http.StatusOK {
 			return nil, &ApiError{*responseWrapper.StatusCode, *responseWrapper.Status, string(responseBody),
-				fmt.Sprintf(DELETE_INCORRECT_STATUS_CODE, http.StatusNoContent, *responseWrapper.StatusCode)}
+				fmt.Sprintf(FETCH_INCORRECT_STATUS_CODE, http.StatusOK, *responseWrapper.StatusCode)}
 		}
 	default:
-		return nil, errors.New("HANDLE CREATE OR FETCH FUNCTION CALLED WITH INCORRECT HTTP VERB")
+		return nil, errors.New(CREATE_OR_FETCH_INCORRECT_VERB)
 	}
 	var account Account
 	check(json.Unmarshal(responseBody, &account))
@@ -135,11 +136,3 @@ func (e *ApiError) Error() string {
 	return fmt.Sprintf(API_ERROR_FORMATTING,
 		e.StatusCode, e.Status, e.ResponseBody, e.Message)
 }
-
-// func fatalApiError(statusCode int, status string, body string, message string) {
-// 	l := log.New(os.Stderr, "", 1)
-// 	l.Println(message)
-// 	l.Fatalf("Status Code : %d, Status : %s", statusCode, status)
-// 	l.Printf("Response Body : %#s\n", body)
-// 	os.Exit(1)
-// }
