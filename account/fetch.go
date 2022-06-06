@@ -5,10 +5,10 @@ import (
 )
 
 func FetchAccount(id uuid.UUID) (*AccountApiResponse, error) {
-	req := NewRequestWithHeaders(FETCH, id, nil)
+	req := newRequestWithHeaders(FETCH, id, nil)
 	response, err := ApiClient.Do(req)
 
-	Check(err)
+	check(err)
 	defer response.Body.Close()
-	return HandleResponse(response, FETCH)
+	return handleResponse(response, FETCH)
 }
