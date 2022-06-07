@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const DIR = "./account/data/"
+const DIR = "./account/testdata/"
 
 func main() {
 	ac := readFile("sample-account.json")
@@ -28,7 +28,7 @@ func main() {
 	var ids []string
 	for i := 1; i < 2; i++ {
 		ac.Data.ID = uuid.New().String()
-		apiResponse, err := account.CreateAccount(ac)
+		apiResponse, err := account.Create(ac)
 		ids = append(ids, ac.Data.ID)
 
 		panicError(err)
@@ -37,7 +37,7 @@ func main() {
 	}
 
 	for _, id := range ids {
-		apiResponse, err := account.FetchAccount(uuid.MustParse(id))
+		apiResponse, err := account.Fetch(uuid.MustParse(id))
 		panicError(err)
 		apiRespJson, _ := json.MarshalIndent(apiResponse, "", "  ")
 		fmt.Printf("%s\n%s\n", "Fetched the following account: ", apiRespJson)

@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func CreateAccount(acc Account) (*AccountApiResponse, error) {
+func Create(acc Account) (*AccountApiResponse, error) {
 	accountJSON, err := json.Marshal(acc)
 	check(err)
 
