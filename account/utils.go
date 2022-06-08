@@ -12,26 +12,26 @@ import (
 	"github.com/google/uuid"
 )
 
-var Host string
-var ApiVersion string
-
-const AccountsEndpoint string = "organisation/accounts"
-
-type Verb int
-
-const (
-	CREATE Verb = iota
-	FETCH
-	DELETE
-	API_ERROR_FORMATTING           = "ACCOUNT API ERROR\nSTATUS CODE : %d\nSTATUS : %s\nRESPONSE BODY : %s\nMESSAGE : %s"
-	DELETE_INCORRECT_STATUS_CODE   = "DELETE OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
-	CREATE_INCORRECT_STATUS_CODE   = "CREATE OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
-	FETCH_INCORRECT_STATUS_CODE    = "FETCH OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
-	ERROR_STATUS_CODE              = "GOT ERROR STATUS CODE OF %d, STATUS %s"
-	CREATE_OR_FETCH_INCORRECT_VERB = "HANDLE CREATE OR FETCH FUNCTION CALLED WITH INCORRECT HTTP VERB"
+var (
+	Host       string
+	ApiVersion string
+	ApiClient  *http.Client
 )
 
-var ApiClient *http.Client
+type httpVerb int
+
+const (
+	createVerb httpVerb = iota
+	fetchVerb
+	deleteVerb
+	accountsEndpoint                          = "organisation/accounts"
+	api_error_formatting                      = "ACCOUNT API ERROR\nSTATUS CODE : %d\nSTATUS : %s\nRESPONSE BODY : %s\nMESSAGE : %s"
+	delete_incorrect_status_code_formatting   = "DELETE OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
+	create_incorrect_status_code_formatting   = "CREATE OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
+	fetch_incorrect_status_code_formatting    = "FETCH OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
+	error_status_code_formatting              = "GOT ERROR STATUS CODE OF %d, STATUS %s"
+	create_or_fetch_incorrect_verb_formatting = "HANDLE CREATE OR FETCH FUNCTION CALLED WITH INCORRECT HTTP VERB"
+)
 
 func init() {
 	ApiClient = &http.Client{}
@@ -39,18 +39,18 @@ func init() {
 	ApiVersion = "v1/"
 }
 
-func (index Verb) String() string {
+func (index httpVerb) String() string {
 	return [...]string{"POST", "GET", "DELETE"}[index]
 }
 
-func newRequestWithHeaders(verb Verb, id uuid.UUID, version *int64) *http.Request {
+func newRequestWithHeaders(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
 	req, err := http.NewRequest(verb.String(), endpointString(id), nil)
 	check(err)
 	req.Header.Add("Host", Host)
 	req.Header.Add("Date", time.Now().String())
 	req.Header.Add("Accept", "application/vnd.api+json")
 
-	if verb == DELETE {
+	if verb == deleteVerb {
 		q := req.URL.Query()
 		q.Add("version", strconv.Itoa(int(*version)))
 		req.URL.RawQuery = q.Encode()
@@ -59,7 +59,7 @@ func newRequestWithHeaders(verb Verb, id uuid.UUID, version *int64) *http.Reques
 }
 
 func endpointString(id uuid.UUID) string {
-	finalEndpoint := Host + ApiVersion + AccountsEndpoint
+	finalEndpoint := Host + ApiVersion + accountsEndpoint
 	if id == uuid.Nil {
 		return finalEndpoint
 	} else {
@@ -67,42 +67,42 @@ func endpointString(id uuid.UUID) string {
 	}
 }
 
-func handleResponse(response *http.Response, verb Verb) (*AccountApiResponse, error) {
+func handleResponse(response *http.Response, verb httpVerb) (*AccountApiResponse, error) {
 	var responseWrapper AccountApiResponse
-	responseWrapper.Status = &response.Status
-	responseWrapper.StatusCode = &response.StatusCode
+	responseWrapper.Status = response.Status
+	responseWrapper.StatusCode = response.StatusCode
 
 	responseBody, err := ioutil.ReadAll(response.Body)
 	check(err)
 	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusBadRequest {
 		switch verb {
-		case CREATE, FETCH:
+		case createVerb, fetchVerb:
 			return handleCreateOrFetchResponse(responseBody, responseWrapper, verb)
-		case DELETE:
+		case deleteVerb:
 			return handleDeleteResponse(responseWrapper, responseBody)
 		default:
 			return nil, errors.New("UNHANDLED HTTP VERB")
 		}
 	} else {
-		return nil, &ApiError{*responseWrapper.StatusCode, *responseWrapper.Status, string(responseBody),
-			fmt.Sprintf(ERROR_STATUS_CODE, *responseWrapper.StatusCode, *responseWrapper.Status)}
+		return nil, &ApiError{responseWrapper.StatusCode, responseWrapper.Status, string(responseBody),
+			fmt.Sprintf(error_status_code_formatting, responseWrapper.StatusCode, responseWrapper.Status)}
 	}
 }
 
-func handleCreateOrFetchResponse(responseBody []byte, responseWrapper AccountApiResponse, verb Verb) (*AccountApiResponse, error) {
+func handleCreateOrFetchResponse(responseBody []byte, responseWrapper AccountApiResponse, verb httpVerb) (*AccountApiResponse, error) {
 	switch verb {
-	case CREATE:
-		if *responseWrapper.StatusCode != http.StatusCreated {
-			return nil, &ApiError{*responseWrapper.StatusCode, *responseWrapper.Status, string(responseBody),
-				fmt.Sprintf(CREATE_INCORRECT_STATUS_CODE, http.StatusCreated, *responseWrapper.StatusCode)}
+	case createVerb:
+		if responseWrapper.StatusCode != http.StatusCreated {
+			return nil, &ApiError{responseWrapper.StatusCode, responseWrapper.Status, string(responseBody),
+				fmt.Sprintf(create_incorrect_status_code_formatting, http.StatusCreated, responseWrapper.StatusCode)}
 		}
-	case FETCH:
-		if *responseWrapper.StatusCode != http.StatusOK {
-			return nil, &ApiError{*responseWrapper.StatusCode, *responseWrapper.Status, string(responseBody),
-				fmt.Sprintf(FETCH_INCORRECT_STATUS_CODE, http.StatusOK, *responseWrapper.StatusCode)}
+	case fetchVerb:
+		if responseWrapper.StatusCode != http.StatusOK {
+			return nil, &ApiError{responseWrapper.StatusCode, responseWrapper.Status, string(responseBody),
+				fmt.Sprintf(fetch_incorrect_status_code_formatting, http.StatusOK, responseWrapper.StatusCode)}
 		}
 	default:
-		return nil, errors.New(CREATE_OR_FETCH_INCORRECT_VERB)
+		return nil, errors.New(create_or_fetch_incorrect_verb_formatting)
 	}
 	var account Account
 	check(json.Unmarshal(responseBody, &account))
@@ -111,11 +111,11 @@ func handleCreateOrFetchResponse(responseBody []byte, responseWrapper AccountApi
 }
 
 func handleDeleteResponse(responseWrapper AccountApiResponse, responseBody []byte) (*AccountApiResponse, error) {
-	if *responseWrapper.StatusCode == http.StatusNoContent {
+	if responseWrapper.StatusCode == http.StatusNoContent {
 		return &responseWrapper, nil
 	} else {
-		return nil, &ApiError{*responseWrapper.StatusCode, *responseWrapper.Status, string(responseBody),
-			fmt.Sprintf(DELETE_INCORRECT_STATUS_CODE, http.StatusNoContent, *responseWrapper.StatusCode)}
+		return nil, &ApiError{responseWrapper.StatusCode, responseWrapper.Status, string(responseBody),
+			fmt.Sprintf(delete_incorrect_status_code_formatting, http.StatusNoContent, responseWrapper.StatusCode)}
 	}
 }
 
@@ -133,6 +133,6 @@ type ApiError struct {
 }
 
 func (e *ApiError) Error() string {
-	return fmt.Sprintf(API_ERROR_FORMATTING,
+	return fmt.Sprintf(api_error_formatting,
 		e.StatusCode, e.Status, e.ResponseBody, e.Message)
 }

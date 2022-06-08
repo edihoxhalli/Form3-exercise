@@ -9,17 +9,23 @@ import (
 	"github.com/google/uuid"
 )
 
+var (
+	newReq    = newRequestWithHeaders
+	handleRes = handleResponse
+	apiCall   = ApiClient.Do
+)
+
 func Create(acc Account) (*AccountApiResponse, error) {
 	accountJSON, err := json.Marshal(acc)
 	check(err)
 
-	request := newRequestWithHeaders(CREATE, uuid.Nil, nil)
+	request := newReq(createVerb, uuid.Nil, nil)
 	request.Header.Add("Content-Type", "application/vnd.api+json")
 	request.Header.Add("Content-Length", strconv.Itoa(len([]byte(accountJSON))))
 
 	request.Body = ioutil.NopCloser(bytes.NewReader(accountJSON))
-	response, err := ApiClient.Do(request)
+	response, err := apiCall(request)
 	check(err)
 	defer response.Body.Close()
-	return handleResponse(response, CREATE)
+	return handleRes(response, createVerb)
 }
