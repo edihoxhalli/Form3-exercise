@@ -10,13 +10,14 @@ import (
 )
 
 var (
-	newReq    = newRequestWithHeaders
-	handleRes = handleResponse
-	apiCall   = ApiClient.Do
+	newReq      = newRequestWithHeaders
+	handleRes   = handleResponse
+	apiCall     = ApiClient.Do
+	jsonMarshal = json.Marshal
 )
 
 func Create(acc Account) (*AccountApiResponse, error) {
-	accountJSON, err := json.Marshal(acc)
+	accountJSON, err := jsonMarshal(acc)
 	check(err)
 
 	request := newReq(createVerb, uuid.Nil, nil)
