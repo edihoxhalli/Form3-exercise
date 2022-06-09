@@ -2,7 +2,6 @@ package account
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -13,67 +12,41 @@ import (
 )
 
 var (
-	uk_account_without_cop = Account{
-		Data: &AccountData{
-			Attributes: &AccountAttributes{
-				Country:             "GB",
-				BaseCurrency:        "GBP",
-				BankID:              "400300",
-				BankIDCode:          "GBDSC",
-				Bic:                 "NWBKGB22",
-				ValidationType:      "card",
-				ReferenceMask:       "############",
-				AcceptanceQualifier: "same_day",
-				UserDefinedData: &[]UserDefinedData{
-					{
-						Key:   "Some account related key",
-						Value: "Some account related value",
-					},
-				},
-			},
-			Type:           "accounts",
-			ID:             "ad27e265-9605-4b4b-a0e5-3003ea9cc4dc",
-			OrganisationID: "eb0bd6f5-c3f5-44b2-b677-acd23cdde73c",
-		},
-	}
-	exp_res_created_success = &AccountApiResponse{
-		ResponseBody: &uk_account_without_cop,
-		StatusCode:   http.StatusCreated,
-		Status:       "Created",
+	exp_res_deleted_success = &AccountApiResponse{
+		ResponseBody: nil,
+		StatusCode:   http.StatusNoContent,
+		Status:       "No content",
 	}
 )
 
-func TestCreate(t *testing.T) {
-
+func TestDelete(t *testing.T) {
 	subtests := []struct {
 		name             string
 		newReq           func(verb httpVerb, id uuid.UUID, version *int64) *http.Request
 		handleRes        func(response *http.Response, verb httpVerb) (*AccountApiResponse, error)
 		apiCall          func(req *http.Request) (*http.Response, error)
-		jsonMarshal      func(v any) ([]byte, error)
 		expectedResponse *AccountApiResponse
 		expectedErr      error
 		expPanic         bool
 	}{
 		{
-			name: "Successfully created",
+			name: "Successfully deleted",
 			newReq: func(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
 				return &http.Request{
 					Header: make(http.Header),
 				}
 			},
 			handleRes: func(response *http.Response, verb httpVerb) (*AccountApiResponse, error) {
-				return exp_res_created_success, nil
+				return exp_res_deleted_success, nil
 			},
 			apiCall: func(req *http.Request) (*http.Response, error) {
 				return &http.Response{
-					Status:     "Created",
-					StatusCode: http.StatusCreated,
-					Body:       io.NopCloser(bytes.NewBufferString("body")),
+					Status:     "No content",
+					StatusCode: http.StatusNoContent,
+					Body:       io.NopCloser(bytes.NewBufferString("")),
 				}, nil
 			},
-			jsonMarshal:      json.Marshal,
-			expectedResponse: exp_res_created_success,
+			expectedResponse: exp_res_deleted_success,
 			expectedErr:      nil,
 		},
 		{
@@ -85,34 +58,25 @@ func TestCreate(t *testing.T) {
 			},
 			handleRes: func(response *http.Response, verb httpVerb) (*AccountApiResponse, error) {
 				return nil, &ApiError{
-					StatusCode: 400,
-					Status:     "Bad request",
+					StatusCode: 404,
+					Status:     "Not found",
 				}
 			},
 			apiCall: func(req *http.Request) (*http.Response, error) {
 				return &http.Response{
-					Status:     "Bad request",
-					StatusCode: http.StatusBadRequest,
+					Status:     "Not found",
+					StatusCode: http.StatusNotFound,
 					Body:       io.NopCloser(bytes.NewBufferString("")),
 				}, nil
 			},
-			jsonMarshal:      json.Marshal,
 			expectedResponse: nil,
 			expectedErr: &ApiError{
-				StatusCode: 400,
-				Status:     "Bad request",
+				StatusCode: 404,
+				Status:     "Not found",
 			},
 		},
 		{
-			name: "Json Marshaling returns error",
-			jsonMarshal: func(v any) ([]byte, error) {
-				return []byte("Ignore"), errors.New("Failed to marshall")
-			},
-			expPanic: true,
-		},
-		{
-			name:        "Api Call returns error",
-			jsonMarshal: json.Marshal,
+			name: "Api Call returns error",
 			apiCall: func(req *http.Request) (*http.Response, error) {
 				return nil, errors.New("Failed to do api call")
 			},
@@ -124,16 +88,16 @@ func TestCreate(t *testing.T) {
 			expPanic: true,
 		},
 	}
+
 	for _, subtest := range subtests {
 		t.Run(subtest.name, func(t *testing.T) {
 			newReq = subtest.newReq
 			handleRes = subtest.handleRes
 			apiCall = subtest.apiCall
-			jsonMarshal = subtest.jsonMarshal
 			if subtest.expPanic {
-				assertPanicCreate(t, Create, uk_account_without_cop)
+				assertPanicDel(t, Delete)
 			} else {
-				result, err := Create(uk_account_without_cop)
+				result, err := Delete(uuid.New(), 0)
 				if !errors.Is(err, subtest.expectedErr) {
 					t.Errorf("expected error (%v), got error (%v)", subtest.expectedErr, err)
 				}
@@ -145,11 +109,11 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-func assertPanicCreate(t *testing.T, f func(acc Account) (*AccountApiResponse, error), acc Account) {
+func assertPanicDel(t *testing.T, f func(id uuid.UUID, version int64) (*AccountApiResponse, error)) {
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("The code did not panic")
 		}
 	}()
-	f(acc)
+	f(uuid.New(), 0)
 }

@@ -18,6 +18,11 @@ var (
 	ApiClient  *http.Client
 )
 
+var (
+	apiCall     = ApiClient.Do
+	jsonMarshal = json.Marshal
+)
+
 type httpVerb int
 
 const (
@@ -43,7 +48,7 @@ func (index httpVerb) String() string {
 	return [...]string{"POST", "GET", "DELETE"}[index]
 }
 
-func newRequestWithHeaders(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
+var newReq = func(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
 	req, err := http.NewRequest(verb.String(), endpointString(id), nil)
 	check(err)
 	req.Header.Add("Host", Host)
@@ -67,7 +72,7 @@ func endpointString(id uuid.UUID) string {
 	}
 }
 
-func handleResponse(response *http.Response, verb httpVerb) (*AccountApiResponse, error) {
+var handleRes = func(response *http.Response, verb httpVerb) (*AccountApiResponse, error) {
 	var responseWrapper AccountApiResponse
 	responseWrapper.Status = response.Status
 	responseWrapper.StatusCode = response.StatusCode
@@ -89,7 +94,7 @@ func handleResponse(response *http.Response, verb httpVerb) (*AccountApiResponse
 	}
 }
 
-func handleCreateOrFetchResponse(responseBody []byte, responseWrapper AccountApiResponse, verb httpVerb) (*AccountApiResponse, error) {
+var handleCreateOrFetchResponse = func(responseBody []byte, responseWrapper AccountApiResponse, verb httpVerb) (*AccountApiResponse, error) {
 	switch verb {
 	case createVerb:
 		if responseWrapper.StatusCode != http.StatusCreated {
@@ -110,7 +115,7 @@ func handleCreateOrFetchResponse(responseBody []byte, responseWrapper AccountApi
 	return &responseWrapper, nil
 }
 
-func handleDeleteResponse(responseWrapper AccountApiResponse, responseBody []byte) (*AccountApiResponse, error) {
+var handleDeleteResponse = func(responseWrapper AccountApiResponse, responseBody []byte) (*AccountApiResponse, error) {
 	if responseWrapper.StatusCode == http.StatusNoContent {
 		return &responseWrapper, nil
 	} else {
@@ -135,4 +140,8 @@ type ApiError struct {
 func (e *ApiError) Error() string {
 	return fmt.Sprintf(api_error_formatting,
 		e.StatusCode, e.Status, e.ResponseBody, e.Message)
+}
+
+func (e *ApiError) Is(tgt error) bool {
+	return e.Error() == tgt.Error()
 }

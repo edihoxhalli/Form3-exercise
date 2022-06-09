@@ -2,18 +2,10 @@ package account
 
 import (
 	"bytes"
-	"encoding/json"
 	"io/ioutil"
 	"strconv"
 
 	"github.com/google/uuid"
-)
-
-var (
-	newReq      = newRequestWithHeaders
-	handleRes   = handleResponse
-	apiCall     = ApiClient.Do
-	jsonMarshal = json.Marshal
 )
 
 func Create(acc Account) (*AccountApiResponse, error) {
