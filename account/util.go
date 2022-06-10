@@ -19,8 +19,9 @@ var (
 )
 
 var (
-	apiCall     = ApiClient.Do
-	jsonMarshal = json.Marshal
+	apiCall        = ApiClient.Do
+	jsonMarshal    = json.Marshal
+	httpNewRequest = http.NewRequest
 )
 
 type httpVerb int
@@ -49,10 +50,10 @@ func (index httpVerb) String() string {
 }
 
 var newReq = func(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
-	req, err := http.NewRequest(verb.String(), endpointString(id), nil)
+	req, err := httpNewRequest(verb.String(), endpointString(id), nil)
 	check(err)
 	req.Header.Add("Host", Host)
-	req.Header.Add("Date", time.Now().String())
+	req.Header.Add("Date", time.Now().Format(time.RFC3339Nano))
 	req.Header.Add("Accept", "application/vnd.api+json")
 
 	if verb == deleteVerb {
@@ -63,7 +64,7 @@ var newReq = func(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
 	return req
 }
 
-func endpointString(id uuid.UUID) string {
+var endpointString = func(id uuid.UUID) string {
 	finalEndpoint := Host + ApiVersion + accountsEndpoint
 	if id == uuid.Nil {
 		return finalEndpoint
