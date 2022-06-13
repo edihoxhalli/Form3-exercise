@@ -21,6 +21,7 @@ var (
 var (
 	apiCall             = ApiClient.Do
 	jsonMarshal         = json.Marshal
+	jsonUnmarshal       = json.Unmarshal
 	httpNewRequest      = http.NewRequest
 	readRespBody        = ioutil.ReadAll
 	newReq              = newRequestWithHeaders
@@ -116,7 +117,7 @@ var handleResponseForCreateOrFetch = func(responseBody []byte, responseWrapper A
 		return nil, errors.New(create_or_fetch_incorrect_verb_formatting)
 	}
 	var account Account
-	check(json.Unmarshal(responseBody, &account))
+	check(jsonUnmarshal(responseBody, &account))
 	responseWrapper.ResponseBody = &account
 	return &responseWrapper, nil
 }

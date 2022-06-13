@@ -268,3 +268,163 @@ func assertPanicHandleResp(t *testing.T, f func(response *http.Response, verb ht
 	}()
 	f(resp, createMethod)
 }
+
+func TestHandleResponseForCreateOrFetch(t *testing.T) {
+	subtests := []struct {
+		name            string
+		httpVerb        httpMethod
+		responseBody    []byte
+		responseWrapper AccountApiResponse
+		verb            httpMethod
+		jsonUnmarshal   func(data []byte, v any) error
+		expResponse     *AccountApiResponse
+		expError        error
+	}{
+		{
+			name:         "Handle POST response with correct status code",
+			httpVerb:     createMethod,
+			responseBody: []byte("Resp Body"),
+			responseWrapper: AccountApiResponse{
+				StatusCode: http.StatusCreated,
+				Status:     "Created",
+			},
+			verb: createMethod,
+			jsonUnmarshal: func(data []byte, v any) error {
+				a := v.(*Account)
+				*a = *exp_res_created_success.ResponseBody
+				return nil
+			},
+			expResponse: exp_res_created_success,
+		},
+		{
+			name:         "Handle POST response with incorrect status code",
+			httpVerb:     createMethod,
+			responseBody: []byte("Invalid param XXX"),
+			responseWrapper: AccountApiResponse{
+				StatusCode: http.StatusBadRequest,
+				Status:     "Bad request",
+			},
+			verb: createMethod,
+			expError: &ApiError{
+				StatusCode:   http.StatusBadRequest,
+				Status:       "Bad request",
+				ResponseBody: "Invalid param XXX",
+				Message:      "CREATE OPERATION GOT INCORRECT STATUS CODE. EXPECTED: 201, GOT: 400",
+			},
+		},
+		{
+			name:         "Handle Fetch response with correct status code",
+			httpVerb:     fetchMethod,
+			responseBody: []byte("Resp Body"),
+			responseWrapper: AccountApiResponse{
+				StatusCode: http.StatusOK,
+				Status:     "OK",
+			},
+			verb: fetchMethod,
+			jsonUnmarshal: func(data []byte, v any) error {
+				a := v.(*Account)
+				*a = *exp_res_fetch_success.ResponseBody
+				return nil
+			},
+			expResponse: exp_res_fetch_success,
+		},
+		{
+			name:         "Handle FETCH response with incorrect status code",
+			httpVerb:     fetchMethod,
+			responseBody: []byte("Invalid param XXX"),
+			responseWrapper: AccountApiResponse{
+				StatusCode: http.StatusBadRequest,
+				Status:     "Bad request",
+			},
+			verb: fetchMethod,
+			expError: &ApiError{
+				StatusCode:   http.StatusBadRequest,
+				Status:       "Bad request",
+				ResponseBody: "Invalid param XXX",
+				Message:      "FETCH OPERATION GOT INCORRECT STATUS CODE. EXPECTED: 200, GOT: 400",
+			},
+		},
+	}
+
+	for _, subtest := range subtests {
+		t.Run(subtest.name, func(t *testing.T) {
+			jsonUnmarshal = subtest.jsonUnmarshal
+
+			result, err := handleResponseForCreateOrFetch(subtest.responseBody, subtest.responseWrapper, subtest.httpVerb)
+			if err != nil {
+				if !errors.Is(err, subtest.expError) {
+					t.Errorf("expected error (%v), got error (%v)", subtest.expError, err)
+				}
+			} else {
+				exp := subtest.expResponse
+				if result.Status != exp.Status {
+					t.Errorf("expected status (%s), got (%s)", exp.Status, result.Status)
+
+				}
+				if result.StatusCode != exp.StatusCode {
+					t.Errorf("expected status code (%d), got (%d)", exp.StatusCode, result.StatusCode)
+				}
+				if !reflect.DeepEqual(*result.ResponseBody, *exp.ResponseBody) {
+					t.Errorf("expected result (%+v), got (%+v)", *exp.ResponseBody, *result.ResponseBody)
+				}
+			}
+		})
+	}
+}
+
+func TestHandleDeleteResponse(t *testing.T) {
+	subtests := []struct {
+		name            string
+		responseBody    []byte
+		responseWrapper AccountApiResponse
+		expResponse     *AccountApiResponse
+		expError        error
+	}{
+		{
+			name:         "Handle Delete response with correct status code",
+			responseBody: []byte(""),
+			responseWrapper: AccountApiResponse{
+				StatusCode: http.StatusNoContent,
+				Status:     "No content",
+			},
+			expResponse: exp_res_deleted_success,
+		},
+		{
+			name:         "Handle Delete response with incorrect status code",
+			responseBody: []byte(""),
+			responseWrapper: AccountApiResponse{
+				StatusCode: http.StatusNotFound,
+				Status:     "Not found",
+			},
+			expError: &ApiError{
+				StatusCode:   http.StatusNotFound,
+				Status:       "Not found",
+				ResponseBody: "",
+				Message:      "DELETE OPERATION GOT INCORRECT STATUS CODE. EXPECTED: 204, GOT: 404",
+			},
+		},
+	}
+
+	for _, subtest := range subtests {
+		t.Run(subtest.name, func(t *testing.T) {
+			result, err := handleDeleteResponse(subtest.responseWrapper, subtest.responseBody)
+			if err != nil {
+				if !errors.Is(err, subtest.expError) {
+					t.Errorf("expected error (%v), got error (%v)", subtest.expError, err)
+				}
+			} else {
+				exp := subtest.expResponse
+				if result.Status != exp.Status {
+					t.Errorf("expected status (%s), got (%s)", exp.Status, result.Status)
+
+				}
+				if result.StatusCode != exp.StatusCode {
+					t.Errorf("expected status code (%d), got (%d)", exp.StatusCode, result.StatusCode)
+				}
+				if result.ResponseBody != nil {
+					t.Errorf("expected result (%+v), got (%+v)", nil, *result.ResponseBody)
+				}
+			}
+		})
+	}
+}
