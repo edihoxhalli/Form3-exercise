@@ -1,10 +1,12 @@
 package account
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"testing"
 	"time"
 
@@ -14,27 +16,27 @@ import (
 func TestHttpVerbString(t *testing.T) {
 	subtests := []struct {
 		name      string
-		verb      httpVerb
+		verb      httpMethod
 		expString string
 	}{
 		{
 			"Verb POST mapped successfully",
-			createVerb,
+			createMethod,
 			"POST",
 		},
 		{
 			"Verb FETCH mapped successfully",
-			fetchVerb,
+			fetchMethod,
 			"GET",
 		},
 		{
 			"Verb DELETE mapped successfully",
-			deleteVerb,
+			deleteMethod,
 			"DELETE",
 		},
 	}
 	for _, subtest := range subtests {
-		t.Run("Http Verbs mapped successfully", func(t *testing.T) {
+		t.Run(subtest.name, func(t *testing.T) {
 			if subtest.verb.String() != subtest.expString {
 				t.Errorf("expected httpVerb %d to produce %s", subtest.verb, subtest.verb.String())
 			}
@@ -47,7 +49,7 @@ func TestNewRequestWithHeaders(t *testing.T) {
 	subtests := []struct {
 		name            string
 		httpNewRequest  func(method, url string, body io.Reader) (*http.Request, error)
-		httpVerb        httpVerb
+		httpVerb        httpMethod
 		id              uuid.UUID
 		version         *int64
 		expHostHdr      string
@@ -66,7 +68,7 @@ func TestNewRequestWithHeaders(t *testing.T) {
 					},
 				}, nil
 			},
-			httpVerb:     createVerb,
+			httpVerb:     createMethod,
 			id:           uuid.New(),
 			expHostHdr:   Host,
 			expAcceptHdr: "application/vnd.api+json",
@@ -82,7 +84,7 @@ func TestNewRequestWithHeaders(t *testing.T) {
 					},
 				}, nil
 			},
-			httpVerb:        deleteVerb,
+			httpVerb:        deleteMethod,
 			id:              uuid.New(),
 			version:         int64ToPointer(0),
 			expVersionParam: "0",
@@ -122,7 +124,6 @@ func TestNewRequestWithHeaders(t *testing.T) {
 }
 
 func testDateHdr(dateHdrStr string, t *testing.T) {
-	// layout := "Mon Jan 2 15:04:05 MST 2006  (MST is GMT-0700)"
 	dateHdrTime, err := time.Parse(time.RFC3339Nano, dateHdrStr)
 	if err != nil {
 		t.Errorf("got error from Date header conversion %s", err.Error())
@@ -138,11 +139,132 @@ func int64ToPointer(i int64) *int64 {
 	return &i
 }
 
-func assertPanicNewReq(t *testing.T, f func(verb httpVerb, id uuid.UUID, version *int64) *http.Request) {
+func assertPanicNewReq(t *testing.T, f func(verb httpMethod, id uuid.UUID, version *int64) *http.Request) {
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("The code did not panic")
 		}
 	}()
-	f(createVerb, uuid.Nil, nil)
+	f(createMethod, uuid.Nil, nil)
+}
+func TestHandleResponse(t *testing.T) {
+	subtests := []struct {
+		name                string
+		httpVerb            httpMethod
+		responseParam       *http.Response
+		handleCreateOrFetch func(responseBody []byte, responseWrapper AccountApiResponse, verb httpMethod) (*AccountApiResponse, error)
+		handleDelete        func(responseWrapper AccountApiResponse, responseBody []byte) (*AccountApiResponse, error)
+		readRespBody        func(r io.Reader) ([]byte, error)
+		expResponse         *AccountApiResponse
+		expError            error
+		expPanic            bool
+	}{
+		{
+			name:     "Handle successful POST response",
+			httpVerb: createMethod,
+			responseParam: &http.Response{
+				Status:     "Created",
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(bytes.NewBufferString("Successful POST resp")),
+			},
+			handleCreateOrFetch: func(responseBody []byte, responseWrapper AccountApiResponse, verb httpMethod) (*AccountApiResponse, error) {
+				return exp_res_created_success, nil
+			},
+			expResponse: exp_res_created_success,
+			readRespBody: func(r io.Reader) ([]byte, error) {
+				return []byte("Successful POST resp"), nil
+			},
+		},
+		{
+			name:     "Handle successful FETCH response",
+			httpVerb: fetchMethod,
+			responseParam: &http.Response{
+				Status:     "OK",
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString("Successful Fetch Res")),
+			},
+			handleCreateOrFetch: func(responseBody []byte, responseWrapper AccountApiResponse, verb httpMethod) (*AccountApiResponse, error) {
+				return exp_res_fetch_success, nil
+			},
+			expResponse: exp_res_fetch_success,
+			readRespBody: func(r io.Reader) ([]byte, error) {
+				return []byte("Successful Fetch resp"), nil
+			},
+		},
+		{
+			name:     "Handle successful Delete response",
+			httpVerb: deleteMethod,
+			responseParam: &http.Response{
+				Status:     "No content",
+				StatusCode: http.StatusNoContent,
+				Body:       io.NopCloser(bytes.NewBufferString("")),
+			},
+			handleDelete: func(responseWrapper AccountApiResponse, responseBody []byte) (*AccountApiResponse, error) {
+				return exp_res_deleted_success, nil
+			},
+			expResponse: exp_res_deleted_success,
+			readRespBody: func(r io.Reader) ([]byte, error) {
+				return []byte(""), nil
+			},
+		},
+		{
+			name:     "Handle Status BAD REQUEST 400",
+			httpVerb: createMethod,
+			responseParam: &http.Response{
+				Status:     "Bad request",
+				StatusCode: http.StatusBadRequest,
+				Body:       io.NopCloser(bytes.NewBufferString("")),
+			},
+			expResponse: nil,
+			readRespBody: func(r io.Reader) ([]byte, error) {
+				return []byte(""), nil
+			},
+			expError: &ApiError{
+				StatusCode:   http.StatusBadRequest,
+				Status:       "Bad request",
+				ResponseBody: "",
+				Message:      "GOT ERROR STATUS CODE OF 400, STATUS Bad request",
+			},
+		},
+		{
+			name:     "ioutil.ReadAll (readRespBody) returns error and func panics",
+			expPanic: true,
+			readRespBody: func(r io.Reader) ([]byte, error) {
+				return nil, errors.New("Unable to read Response Body")
+			},
+			responseParam: &http.Response{
+				Status:     "Created",
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(bytes.NewBufferString("Successful POST resp")),
+			},
+		},
+	}
+
+	for _, subtest := range subtests {
+		t.Run(subtest.name, func(t *testing.T) {
+			readRespBody = subtest.readRespBody
+			handleCreateOrFetch = subtest.handleCreateOrFetch
+			handleDelete = subtest.handleDelete
+			if subtest.expPanic {
+				assertPanicHandleResp(t, handleResponse, subtest.responseParam)
+			} else {
+				result, err := handleResponse(subtest.responseParam, subtest.httpVerb)
+				if !errors.Is(err, subtest.expError) {
+					t.Errorf("expected error (%v), got error (%v)", subtest.expError, err)
+				}
+				if !reflect.DeepEqual(result, subtest.expResponse) {
+					t.Errorf("expected (%+v), got (%+v)", subtest.expResponse, result)
+				}
+			}
+		})
+	}
+}
+
+func assertPanicHandleResp(t *testing.T, f func(response *http.Response, verb httpMethod) (*AccountApiResponse, error), resp *http.Response) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("The code did not panic")
+		}
+	}()
+	f(resp, createMethod)
 }

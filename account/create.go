@@ -12,7 +12,7 @@ func Create(acc Account) (*AccountApiResponse, error) {
 	accountJSON, err := jsonMarshal(acc)
 	check(err)
 
-	request := newReq(createVerb, uuid.Nil, nil)
+	request := newReq(createMethod, uuid.Nil, nil)
 	request.Header.Add("Content-Type", "application/vnd.api+json")
 	request.Header.Add("Content-Length", strconv.Itoa(len([]byte(accountJSON))))
 
@@ -20,5 +20,5 @@ func Create(acc Account) (*AccountApiResponse, error) {
 	response, err := apiCall(request)
 	check(err)
 	defer response.Body.Close()
-	return handleRes(response, createVerb)
+	return handleRes(response, createMethod)
 }

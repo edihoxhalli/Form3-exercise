@@ -19,18 +19,22 @@ var (
 )
 
 var (
-	apiCall        = ApiClient.Do
-	jsonMarshal    = json.Marshal
-	httpNewRequest = http.NewRequest
-	newReq         = newRequestWithHeaders
+	apiCall             = ApiClient.Do
+	jsonMarshal         = json.Marshal
+	httpNewRequest      = http.NewRequest
+	readRespBody        = ioutil.ReadAll
+	newReq              = newRequestWithHeaders
+	handleRes           = handleResponse
+	handleCreateOrFetch = handleResponseForCreateOrFetch
+	handleDelete        = handleDeleteResponse
 )
 
-type httpVerb int
+type httpMethod int
 
 const (
-	createVerb httpVerb = iota
-	fetchVerb
-	deleteVerb
+	createMethod httpMethod = iota
+	fetchMethod
+	deleteMethod
 	accountsEndpoint                          = "organisation/accounts"
 	api_error_formatting                      = "ACCOUNT API ERROR\nSTATUS CODE : %d\nSTATUS : %s\nRESPONSE BODY : %s\nMESSAGE : %s"
 	delete_incorrect_status_code_formatting   = "DELETE OPERATION GOT INCORRECT STATUS CODE. EXPECTED: %d, GOT: %d"
@@ -46,18 +50,18 @@ func init() {
 	ApiVersion = "v1/"
 }
 
-func (index httpVerb) String() string {
+func (index httpMethod) String() string {
 	return [...]string{"POST", "GET", "DELETE"}[index]
 }
 
-var newRequestWithHeaders = func(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
+var newRequestWithHeaders = func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
 	req, err := httpNewRequest(verb.String(), endpointString(id), nil)
 	check(err)
 	req.Header.Add("Host", Host)
 	req.Header.Add("Date", time.Now().Format(time.RFC3339Nano))
 	req.Header.Add("Accept", "application/vnd.api+json")
 
-	if verb == deleteVerb {
+	if verb == deleteMethod {
 		q := req.URL.Query()
 		q.Add("version", strconv.Itoa(int(*version)))
 		req.URL.RawQuery = q.Encode()
@@ -74,19 +78,19 @@ var endpointString = func(id uuid.UUID) string {
 	}
 }
 
-var handleRes = func(response *http.Response, verb httpVerb) (*AccountApiResponse, error) {
+var handleResponse = func(response *http.Response, verb httpMethod) (*AccountApiResponse, error) {
 	var responseWrapper AccountApiResponse
 	responseWrapper.Status = response.Status
 	responseWrapper.StatusCode = response.StatusCode
 
-	responseBody, err := ioutil.ReadAll(response.Body)
+	responseBody, err := readRespBody(response.Body)
 	check(err)
-	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusBadRequest {
+	if response.StatusCode < http.StatusBadRequest {
 		switch verb {
-		case createVerb, fetchVerb:
-			return handleCreateOrFetchResponse(responseBody, responseWrapper, verb)
-		case deleteVerb:
-			return handleDeleteResponse(responseWrapper, responseBody)
+		case createMethod, fetchMethod:
+			return handleCreateOrFetch(responseBody, responseWrapper, verb)
+		case deleteMethod:
+			return handleDelete(responseWrapper, responseBody)
 		default:
 			return nil, errors.New("UNHANDLED HTTP VERB")
 		}
@@ -96,14 +100,14 @@ var handleRes = func(response *http.Response, verb httpVerb) (*AccountApiRespons
 	}
 }
 
-var handleCreateOrFetchResponse = func(responseBody []byte, responseWrapper AccountApiResponse, verb httpVerb) (*AccountApiResponse, error) {
+var handleResponseForCreateOrFetch = func(responseBody []byte, responseWrapper AccountApiResponse, verb httpMethod) (*AccountApiResponse, error) {
 	switch verb {
-	case createVerb:
+	case createMethod:
 		if responseWrapper.StatusCode != http.StatusCreated {
 			return nil, &ApiError{responseWrapper.StatusCode, responseWrapper.Status, string(responseBody),
 				fmt.Sprintf(create_incorrect_status_code_formatting, http.StatusCreated, responseWrapper.StatusCode)}
 		}
-	case fetchVerb:
+	case fetchMethod:
 		if responseWrapper.StatusCode != http.StatusOK {
 			return nil, &ApiError{responseWrapper.StatusCode, responseWrapper.Status, string(responseBody),
 				fmt.Sprintf(fetch_incorrect_status_code_formatting, http.StatusOK, responseWrapper.StatusCode)}

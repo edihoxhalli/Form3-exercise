@@ -22,8 +22,8 @@ var (
 func TestFetch(t *testing.T) {
 	subtests := []struct {
 		name             string
-		newReq           func(verb httpVerb, id uuid.UUID, version *int64) *http.Request
-		handleRes        func(response *http.Response, verb httpVerb) (*AccountApiResponse, error)
+		newReq           func(verb httpMethod, id uuid.UUID, version *int64) *http.Request
+		handleRes        func(response *http.Response, verb httpMethod) (*AccountApiResponse, error)
 		apiCall          func(req *http.Request) (*http.Response, error)
 		expectedResponse *AccountApiResponse
 		expectedErr      error
@@ -31,12 +31,12 @@ func TestFetch(t *testing.T) {
 	}{
 		{
 			name: "Successfully fetched",
-			newReq: func(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
 				return &http.Request{
 					Header: make(http.Header),
 				}
 			},
-			handleRes: func(response *http.Response, verb httpVerb) (*AccountApiResponse, error) {
+			handleRes: func(response *http.Response, verb httpMethod) (*AccountApiResponse, error) {
 				return exp_res_fetch_success, nil
 			},
 			apiCall: func(req *http.Request) (*http.Response, error) {
@@ -51,12 +51,12 @@ func TestFetch(t *testing.T) {
 		},
 		{
 			name: "Handle response fails",
-			newReq: func(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
 				return &http.Request{
 					Header: make(http.Header),
 				}
 			},
-			handleRes: func(response *http.Response, verb httpVerb) (*AccountApiResponse, error) {
+			handleRes: func(response *http.Response, verb httpMethod) (*AccountApiResponse, error) {
 				return nil, &ApiError{
 					StatusCode: 404,
 					Status:     "Not found",
@@ -80,7 +80,7 @@ func TestFetch(t *testing.T) {
 			apiCall: func(req *http.Request) (*http.Response, error) {
 				return nil, errors.New("Failed to do api call")
 			},
-			newReq: func(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
 				return &http.Request{
 					Header: make(http.Header),
 				}
