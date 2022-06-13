@@ -42,7 +42,7 @@ func TestHttpVerbString(t *testing.T) {
 	}
 }
 
-func TestNewReq(t *testing.T) {
+func TestNewRequestWithHeaders(t *testing.T) {
 
 	subtests := []struct {
 		name            string
@@ -57,15 +57,14 @@ func TestNewReq(t *testing.T) {
 	}{
 		{
 			name: "New POST request with Headers",
-			httpNewRequest: func(method, custUrl string, body io.Reader) (*http.Request, error) {
+			httpNewRequest: func(method, httpUrl string, body io.Reader) (*http.Request, error) {
 				return &http.Request{
 					Header: make(http.Header),
 					Method: http.MethodPost,
 					URL: &url.URL{
-						Scheme:  "http://",
-						Host:    "localhost:8080",
-						RawPath: "/accounts",
-					}}, nil
+						RawPath: "http://localhost:8080/v1/organization/accounts",
+					},
+				}, nil
 			},
 			httpVerb:     createVerb,
 			id:           uuid.New(),
@@ -74,15 +73,14 @@ func TestNewReq(t *testing.T) {
 		},
 		{
 			name: "New DELETE request with Headers",
-			httpNewRequest: func(method, custUrl string, body io.Reader) (*http.Request, error) {
+			httpNewRequest: func(method, httpUrl string, body io.Reader) (*http.Request, error) {
 				return &http.Request{
-					Header: make(http.Header),
-					Method: http.MethodDelete,
+					Header:     make(http.Header),
+					RequestURI: "http://localhost:8080/v1/organization/accounts",
 					URL: &url.URL{
-						Scheme:  "http://",
-						Host:    "localhost:8080",
-						RawPath: "/accounts",
-					}}, nil
+						RawPath: "http://localhost:8080/v1/organization/accounts",
+					},
+				}, nil
 			},
 			httpVerb:        deleteVerb,
 			id:              uuid.New(),
@@ -104,9 +102,9 @@ func TestNewReq(t *testing.T) {
 		t.Run(subtest.name, func(t *testing.T) {
 			httpNewRequest = subtest.httpNewRequest
 			if subtest.expPanic {
-				assertPanicNewReq(t, newReq)
+				assertPanicNewReq(t, newRequestWithHeaders)
 			} else {
-				result := newReq(subtest.httpVerb, subtest.id, subtest.version)
+				result := newRequestWithHeaders(subtest.httpVerb, subtest.id, subtest.version)
 				if result.Header.Get("Host") != subtest.expHostHdr {
 					t.Errorf("expected header Host (%+v), got (%+v)", subtest.expHostHdr, result.Header.Get("Host"))
 				}

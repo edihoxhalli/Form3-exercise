@@ -22,6 +22,7 @@ var (
 	apiCall        = ApiClient.Do
 	jsonMarshal    = json.Marshal
 	httpNewRequest = http.NewRequest
+	newReq         = newRequestWithHeaders
 )
 
 type httpVerb int
@@ -49,7 +50,7 @@ func (index httpVerb) String() string {
 	return [...]string{"POST", "GET", "DELETE"}[index]
 }
 
-var newReq = func(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
+var newRequestWithHeaders = func(verb httpVerb, id uuid.UUID, version *int64) *http.Request {
 	req, err := httpNewRequest(verb.String(), endpointString(id), nil)
 	check(err)
 	req.Header.Add("Host", Host)
