@@ -10,15 +10,21 @@ import (
 
 func Create(acc Account) (*AccountApiResponse, error) {
 	accountJSON, err := jsonMarshal(acc)
-	check(err)
+	if err != nil {
+		return nil, err
+	}
 
-	request := newReq(createMethod, uuid.Nil, nil)
+	request, err := newReq(createMethod, uuid.Nil, nil)
+	if err != nil {
+		return nil, err
+	}
 	request.Header.Add("Content-Type", "application/vnd.api+json")
 	request.Header.Add("Content-Length", strconv.Itoa(len([]byte(accountJSON))))
 
 	request.Body = ioutil.NopCloser(bytes.NewReader(accountJSON))
 	response, err := apiCall(request)
-	check(err)
-	defer response.Body.Close()
+	if err != nil {
+		return nil, err
+	}
 	return handleRes(response, createMethod)
 }

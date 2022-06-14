@@ -3,10 +3,13 @@ package account
 import "github.com/google/uuid"
 
 func Delete(id uuid.UUID, version int64) (*AccountApiResponse, error) {
-	req := newReq(deleteMethod, id, &version)
+	req, err := newReq(deleteMethod, id, &version)
+	if err != nil {
+		return nil, err
+	}
 	response, err := apiCall(req)
-
-	check(err)
-	defer response.Body.Close()
+	if err != nil {
+		return nil, err
+	}
 	return handleRes(response, deleteMethod)
 }

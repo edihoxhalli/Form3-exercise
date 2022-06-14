@@ -5,10 +5,13 @@ import (
 )
 
 func Fetch(id uuid.UUID) (*AccountApiResponse, error) {
-	req := newReq(fetchMethod, id, nil)
+	req, err := newReq(fetchMethod, id, nil)
+	if err != nil {
+		return nil, err
+	}
 	response, err := apiCall(req)
-
-	check(err)
-	defer response.Body.Close()
+	if err != nil {
+		return nil, err
+	}
 	return handleRes(response, fetchMethod)
 }

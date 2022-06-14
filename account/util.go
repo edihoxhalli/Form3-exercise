@@ -55,9 +55,11 @@ func (index httpMethod) String() string {
 	return [...]string{"POST", "GET", "DELETE"}[index]
 }
 
-var newRequestWithHeaders = func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
+var newRequestWithHeaders = func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error) {
 	req, err := httpNewRequest(verb.String(), endpointString(id), nil)
-	check(err)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Add("Host", Host)
 	req.Header.Add("Date", time.Now().Format(time.RFC3339Nano))
 	req.Header.Add("Accept", "application/vnd.api+json")
@@ -67,7 +69,7 @@ var newRequestWithHeaders = func(verb httpMethod, id uuid.UUID, version *int64) 
 		q.Add("version", strconv.Itoa(int(*version)))
 		req.URL.RawQuery = q.Encode()
 	}
-	return req
+	return req, nil
 }
 
 var endpointString = func(id uuid.UUID) string {
@@ -80,12 +82,15 @@ var endpointString = func(id uuid.UUID) string {
 }
 
 var handleResponse = func(response *http.Response, verb httpMethod) (*AccountApiResponse, error) {
+	defer response.Body.Close()
 	var responseWrapper AccountApiResponse
 	responseWrapper.Status = response.Status
 	responseWrapper.StatusCode = response.StatusCode
 
 	responseBody, err := readRespBody(response.Body)
-	check(err)
+	if err != nil {
+		return nil, err
+	}
 	if response.StatusCode < http.StatusBadRequest {
 		switch verb {
 		case createMethod, fetchMethod:
@@ -117,7 +122,10 @@ var handleResponseForCreateOrFetch = func(responseBody []byte, responseWrapper A
 		return nil, errors.New(create_or_fetch_incorrect_verb_formatting)
 	}
 	var account Account
-	check(jsonUnmarshal(responseBody, &account))
+	err := jsonUnmarshal(responseBody, &account)
+	if err != nil {
+		return nil, err
+	}
 	responseWrapper.ResponseBody = &account
 	return &responseWrapper, nil
 }
@@ -128,12 +136,6 @@ var handleDeleteResponse = func(responseWrapper AccountApiResponse, responseBody
 	} else {
 		return nil, &ApiError{responseWrapper.StatusCode, responseWrapper.Status, string(responseBody),
 			fmt.Sprintf(delete_incorrect_status_code_formatting, http.StatusNoContent, responseWrapper.StatusCode)}
-	}
-}
-
-func check(err error) {
-	if err != nil {
-		panic(err)
 	}
 }
 

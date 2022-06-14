@@ -47,20 +47,19 @@ func TestCreate(t *testing.T) {
 
 	subtests := []struct {
 		name             string
-		newReq           func(verb httpMethod, id uuid.UUID, version *int64) *http.Request
+		newReq           func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error)
 		handleRes        func(response *http.Response, verb httpMethod) (*AccountApiResponse, error)
 		apiCall          func(req *http.Request) (*http.Response, error)
 		jsonMarshal      func(v any) ([]byte, error)
 		expectedResponse *AccountApiResponse
 		expectedErr      error
-		expPanic         bool
 	}{
 		{
 			name: "Successfully created",
-			newReq: func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error) {
 				return &http.Request{
 					Header: make(http.Header),
-				}
+				}, nil
 			},
 			handleRes: func(response *http.Response, verb httpMethod) (*AccountApiResponse, error) {
 				return exp_res_created_success, nil
@@ -78,10 +77,10 @@ func TestCreate(t *testing.T) {
 		},
 		{
 			name: "Handle response fails",
-			newReq: func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error) {
 				return &http.Request{
 					Header: make(http.Header),
-				}
+				}, nil
 			},
 			handleRes: func(response *http.Response, verb httpMethod) (*AccountApiResponse, error) {
 				return nil, &ApiError{
@@ -106,9 +105,9 @@ func TestCreate(t *testing.T) {
 		{
 			name: "Json Marshaling returns error",
 			jsonMarshal: func(v any) ([]byte, error) {
-				return []byte("Ignore"), errors.New("Failed to marshall")
+				return nil, errors.New("Failed to marshall")
 			},
-			expPanic: true,
+			expectedErr: errors.New("Failed to marshall"),
 		},
 		{
 			name:        "Api Call returns error",
@@ -116,12 +115,20 @@ func TestCreate(t *testing.T) {
 			apiCall: func(req *http.Request) (*http.Response, error) {
 				return nil, errors.New("Failed to do api call")
 			},
-			newReq: func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error) {
 				return &http.Request{
 					Header: make(http.Header),
-				}
+				}, nil
 			},
-			expPanic: true,
+			expectedErr: errors.New("Failed to do api call"),
+		},
+		{
+			name:        "New Request With Headers returns error",
+			jsonMarshal: json.Marshal,
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error) {
+				return nil, errors.New("Failed to create new request")
+			},
+			expectedErr: errors.New("Failed to create new request"),
 		},
 	}
 	for _, subtest := range subtests {
@@ -130,26 +137,13 @@ func TestCreate(t *testing.T) {
 			handleRes = subtest.handleRes
 			apiCall = subtest.apiCall
 			jsonMarshal = subtest.jsonMarshal
-			if subtest.expPanic {
-				assertPanicCreate(t, Create, test_acc)
-			} else {
-				result, err := Create(test_acc)
-				if !errors.Is(err, subtest.expectedErr) {
-					t.Errorf("expected error (%v), got error (%v)", subtest.expectedErr, err)
-				}
-				if !reflect.DeepEqual(result, subtest.expectedResponse) {
-					t.Errorf("expected (%+v), got (%+v)", subtest.expectedResponse, result)
-				}
+			result, err := Create(test_acc)
+			if err != nil && subtest.expectedErr.Error() != err.Error() {
+				t.Errorf("expected error (%v), got error (%v)", subtest.expectedErr, err)
+			}
+			if !reflect.DeepEqual(result, subtest.expectedResponse) {
+				t.Errorf("expected (%+v), got (%+v)", subtest.expectedResponse, result)
 			}
 		})
 	}
-}
-
-func assertPanicCreate(t *testing.T, f func(acc Account) (*AccountApiResponse, error), acc Account) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic")
-		}
-	}()
-	f(acc)
 }

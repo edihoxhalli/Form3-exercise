@@ -44,6 +44,44 @@ func TestHttpVerbString(t *testing.T) {
 	}
 }
 
+func TestEndpointString(t *testing.T) {
+	idParam := uuid.New()
+	idStr := idParam.String()
+	subtests := []struct {
+		name             string
+		id               uuid.UUID
+		Host             string
+		ApiVersion       string
+		accountsEndpoint string
+		expResp          string
+	}{
+		{
+			name:             "Final Endpoint without UUID",
+			id:               uuid.Nil,
+			Host:             Host,
+			ApiVersion:       ApiVersion,
+			accountsEndpoint: accountsEndpoint,
+			expResp:          "http://localhost:8080/v1/organisation/accounts",
+		},
+		{
+			name:             "Final Endpoint with UUID",
+			id:               idParam,
+			Host:             Host,
+			ApiVersion:       ApiVersion,
+			accountsEndpoint: accountsEndpoint,
+			expResp:          "http://localhost:8080/v1/organisation/accounts/" + idStr,
+		},
+	}
+	for _, subtest := range subtests {
+		t.Run(subtest.name, func(t *testing.T) {
+			result := endpointString(subtest.id)
+			if result != subtest.expResp {
+				t.Errorf("expected endpoint string (%s), got (%s)", subtest.expResp, result)
+			}
+		})
+	}
+}
+
 func TestNewRequestWithHeaders(t *testing.T) {
 
 	subtests := []struct {
@@ -55,7 +93,7 @@ func TestNewRequestWithHeaders(t *testing.T) {
 		expHostHdr      string
 		expAcceptHdr    string
 		expVersionParam string
-		expPanic        bool
+		expError        error
 	}{
 		{
 			name: "New POST request with Headers",
@@ -92,21 +130,23 @@ func TestNewRequestWithHeaders(t *testing.T) {
 			expAcceptHdr:    "application/vnd.api+json",
 		},
 		{
-			name: "http.NewRequest returns error and func panics",
+			name: "http.NewRequest returns error",
 			httpNewRequest: func(method, url string, body io.Reader) (*http.Request, error) {
 				return nil, errors.New("Error")
 			},
-			expPanic: true,
+			expError: errors.New("Error"),
 		},
 	}
 
 	for _, subtest := range subtests {
 		t.Run(subtest.name, func(t *testing.T) {
 			httpNewRequest = subtest.httpNewRequest
-			if subtest.expPanic {
-				assertPanicNewReq(t, newRequestWithHeaders)
+			result, err := newRequestWithHeaders(subtest.httpVerb, subtest.id, subtest.version)
+			if err != nil {
+				if subtest.expError.Error() != err.Error() {
+					t.Errorf("expected error (%+v), got (%+v)", subtest.expError, err)
+				}
 			} else {
-				result := newRequestWithHeaders(subtest.httpVerb, subtest.id, subtest.version)
 				if result.Header.Get("Host") != subtest.expHostHdr {
 					t.Errorf("expected header Host (%+v), got (%+v)", subtest.expHostHdr, result.Header.Get("Host"))
 				}
@@ -139,14 +179,6 @@ func int64ToPointer(i int64) *int64 {
 	return &i
 }
 
-func assertPanicNewReq(t *testing.T, f func(verb httpMethod, id uuid.UUID, version *int64) *http.Request) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic")
-		}
-	}()
-	f(createMethod, uuid.Nil, nil)
-}
 func TestHandleResponse(t *testing.T) {
 	subtests := []struct {
 		name                string
@@ -157,7 +189,6 @@ func TestHandleResponse(t *testing.T) {
 		readRespBody        func(r io.Reader) ([]byte, error)
 		expResponse         *AccountApiResponse
 		expError            error
-		expPanic            bool
 	}{
 		{
 			name:     "Handle successful POST response",
@@ -227,8 +258,7 @@ func TestHandleResponse(t *testing.T) {
 			},
 		},
 		{
-			name:     "ioutil.ReadAll (readRespBody) returns error and func panics",
-			expPanic: true,
+			name: "ioutil.ReadAll (readRespBody) returns error",
 			readRespBody: func(r io.Reader) ([]byte, error) {
 				return nil, errors.New("Unable to read Response Body")
 			},
@@ -237,6 +267,7 @@ func TestHandleResponse(t *testing.T) {
 				StatusCode: http.StatusCreated,
 				Body:       io.NopCloser(bytes.NewBufferString("Successful POST resp")),
 			},
+			expError: errors.New("Unable to read Response Body"),
 		},
 	}
 
@@ -245,28 +276,16 @@ func TestHandleResponse(t *testing.T) {
 			readRespBody = subtest.readRespBody
 			handleCreateOrFetch = subtest.handleCreateOrFetch
 			handleDelete = subtest.handleDelete
-			if subtest.expPanic {
-				assertPanicHandleResp(t, handleResponse, subtest.responseParam)
-			} else {
-				result, err := handleResponse(subtest.responseParam, subtest.httpVerb)
-				if !errors.Is(err, subtest.expError) {
-					t.Errorf("expected error (%v), got error (%v)", subtest.expError, err)
-				}
-				if !reflect.DeepEqual(result, subtest.expResponse) {
-					t.Errorf("expected (%+v), got (%+v)", subtest.expResponse, result)
-				}
+
+			result, err := handleResponse(subtest.responseParam, subtest.httpVerb)
+			if err != nil && subtest.expError.Error() != err.Error() {
+				t.Errorf("expected error (%+v), got (%+v)", subtest.expError, err)
+			}
+			if !reflect.DeepEqual(result, subtest.expResponse) {
+				t.Errorf("expected (%+v), got (%+v)", subtest.expResponse, result)
 			}
 		})
 	}
-}
-
-func assertPanicHandleResp(t *testing.T, f func(response *http.Response, verb httpMethod) (*AccountApiResponse, error), resp *http.Response) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic")
-		}
-	}()
-	f(resp, createMethod)
 }
 
 func TestHandleResponseForCreateOrFetch(t *testing.T) {
@@ -329,6 +348,20 @@ func TestHandleResponseForCreateOrFetch(t *testing.T) {
 			expResponse: exp_res_fetch_success,
 		},
 		{
+			name:         "Json Unmarshal returns error",
+			httpVerb:     fetchMethod,
+			responseBody: []byte("Resp Body"),
+			responseWrapper: AccountApiResponse{
+				StatusCode: http.StatusOK,
+				Status:     "OK",
+			},
+			verb: fetchMethod,
+			jsonUnmarshal: func(data []byte, v any) error {
+				return errors.New("Error during unmarshaling")
+			},
+			expError: errors.New("Error during unmarshaling"),
+		},
+		{
 			name:         "Handle FETCH response with incorrect status code",
 			httpVerb:     fetchMethod,
 			responseBody: []byte("Invalid param XXX"),
@@ -352,14 +385,13 @@ func TestHandleResponseForCreateOrFetch(t *testing.T) {
 
 			result, err := handleResponseForCreateOrFetch(subtest.responseBody, subtest.responseWrapper, subtest.httpVerb)
 			if err != nil {
-				if !errors.Is(err, subtest.expError) {
-					t.Errorf("expected error (%v), got error (%v)", subtest.expError, err)
+				if err != nil && subtest.expError.Error() != err.Error() {
+					t.Errorf("expected error (%+v), got (%+v)", subtest.expError, err)
 				}
 			} else {
 				exp := subtest.expResponse
 				if result.Status != exp.Status {
 					t.Errorf("expected status (%s), got (%s)", exp.Status, result.Status)
-
 				}
 				if result.StatusCode != exp.StatusCode {
 					t.Errorf("expected status code (%d), got (%d)", exp.StatusCode, result.StatusCode)
@@ -409,14 +441,14 @@ func TestHandleDeleteResponse(t *testing.T) {
 		t.Run(subtest.name, func(t *testing.T) {
 			result, err := handleDeleteResponse(subtest.responseWrapper, subtest.responseBody)
 			if err != nil {
-				if !errors.Is(err, subtest.expError) {
-					t.Errorf("expected error (%v), got error (%v)", subtest.expError, err)
+				if err != nil && subtest.expError.Error() != err.Error() {
+					t.Errorf("expected error (%+v), got (%+v)", subtest.expError, err)
+					t.FailNow()
 				}
 			} else {
 				exp := subtest.expResponse
 				if result.Status != exp.Status {
 					t.Errorf("expected status (%s), got (%s)", exp.Status, result.Status)
-
 				}
 				if result.StatusCode != exp.StatusCode {
 					t.Errorf("expected status code (%d), got (%d)", exp.StatusCode, result.StatusCode)

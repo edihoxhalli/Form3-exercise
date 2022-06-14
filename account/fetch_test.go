@@ -22,19 +22,18 @@ var (
 func TestFetch(t *testing.T) {
 	subtests := []struct {
 		name             string
-		newReq           func(verb httpMethod, id uuid.UUID, version *int64) *http.Request
+		newReq           func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error)
 		handleRes        func(response *http.Response, verb httpMethod) (*AccountApiResponse, error)
 		apiCall          func(req *http.Request) (*http.Response, error)
 		expectedResponse *AccountApiResponse
 		expectedErr      error
-		expPanic         bool
 	}{
 		{
 			name: "Successfully fetched",
-			newReq: func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error) {
 				return &http.Request{
 					Header: make(http.Header),
-				}
+				}, nil
 			},
 			handleRes: func(response *http.Response, verb httpMethod) (*AccountApiResponse, error) {
 				return exp_res_fetch_success, nil
@@ -51,10 +50,10 @@ func TestFetch(t *testing.T) {
 		},
 		{
 			name: "Handle response fails",
-			newReq: func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error) {
 				return &http.Request{
 					Header: make(http.Header),
-				}
+				}, nil
 			},
 			handleRes: func(response *http.Response, verb httpMethod) (*AccountApiResponse, error) {
 				return nil, &ApiError{
@@ -80,12 +79,19 @@ func TestFetch(t *testing.T) {
 			apiCall: func(req *http.Request) (*http.Response, error) {
 				return nil, errors.New("Failed to do api call")
 			},
-			newReq: func(verb httpMethod, id uuid.UUID, version *int64) *http.Request {
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error) {
 				return &http.Request{
 					Header: make(http.Header),
-				}
+				}, nil
 			},
-			expPanic: true,
+			expectedErr: errors.New("Failed to do api call"),
+		},
+		{
+			name: "New Request With Headers returns error",
+			newReq: func(verb httpMethod, id uuid.UUID, version *int64) (*http.Request, error) {
+				return nil, errors.New("Failed to create new request")
+			},
+			expectedErr: errors.New("Failed to create new request"),
 		},
 	}
 
@@ -94,26 +100,13 @@ func TestFetch(t *testing.T) {
 			newReq = subtest.newReq
 			handleRes = subtest.handleRes
 			apiCall = subtest.apiCall
-			if subtest.expPanic {
-				assertPanicFetch(t, Fetch)
-			} else {
-				result, err := Fetch(uuid.New())
-				if !errors.Is(err, subtest.expectedErr) {
-					t.Errorf("expected error (%v), got error (%v)", subtest.expectedErr, err)
-				}
-				if !reflect.DeepEqual(result, subtest.expectedResponse) {
-					t.Errorf("expected (%+v), got (%+v)", subtest.expectedResponse, result)
-				}
+			result, err := Fetch(uuid.New())
+			if err != nil && subtest.expectedErr.Error() != err.Error() {
+				t.Errorf("expected error (%v), got error (%v)", subtest.expectedErr, err)
+			}
+			if !reflect.DeepEqual(result, subtest.expectedResponse) {
+				t.Errorf("expected (%+v), got (%+v)", subtest.expectedResponse, result)
 			}
 		})
 	}
-}
-
-func assertPanicFetch(t *testing.T, f func(id uuid.UUID) (*AccountApiResponse, error)) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic")
-		}
-	}()
-	f(uuid.New())
 }
