@@ -16,20 +16,11 @@ var (
 	test_acc = Account{
 		Data: &AccountData{
 			Attributes: &AccountAttributes{
-				Country:             "GB",
-				BaseCurrency:        "GBP",
-				BankID:              "400300",
-				BankIDCode:          "GBDSC",
-				Bic:                 "NWBKGB22",
-				ValidationType:      "card",
-				ReferenceMask:       "############",
-				AcceptanceQualifier: "same_day",
-				UserDefinedData: &[]UserDefinedData{
-					{
-						Key:   "Some account related key",
-						Value: "Some account related value",
-					},
-				},
+				Country:      newStringPointer("GB"),
+				BaseCurrency: "GBP",
+				BankID:       "400300",
+				BankIDCode:   "GBDSC",
+				Bic:          "NWBKGB22",
 			},
 			Type:           "accounts",
 			ID:             "ad27e265-9605-4b4b-a0e5-3003ea9cc4dc",
@@ -42,6 +33,10 @@ var (
 		Status:       "Created",
 	}
 )
+
+func newStringPointer(s string) *string {
+	return &s
+}
 
 func TestCreate(t *testing.T) {
 

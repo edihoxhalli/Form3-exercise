@@ -13,9 +13,18 @@ import (
 )
 
 var (
-	Host       string
-	ApiVersion string
-	ApiClient  *http.Client
+	// Host must contain API http scheme + actual hostname including possible port.
+	// It should end with forward slash.
+	// Example: "http://localhost:8080/"
+	Host string = "http://localhost:8080/"
+	// ApiVersion contains api version.
+	// It will be concatenated after the Host variable, therefore
+	// it shouldn't have a slash prefix, but should have a slash postfix.
+	// Example: "v1/"
+	ApiVersion string = "v1/"
+	// ApiClient is a pointer to the standard http client which will execute the http requests.
+	// Has a timeout of 1 second.
+	ApiClient *http.Client = &http.Client{Timeout: time.Duration(1) * time.Second}
 )
 
 var (
@@ -44,12 +53,6 @@ const (
 	error_status_code_formatting              = "GOT ERROR STATUS CODE OF %d, STATUS %s"
 	create_or_fetch_incorrect_verb_formatting = "HANDLE CREATE OR FETCH FUNCTION CALLED WITH INCORRECT HTTP VERB"
 )
-
-func init() {
-	ApiClient = &http.Client{}
-	Host = "http://localhost:8080/"
-	ApiVersion = "v1/"
-}
 
 func (index httpMethod) String() string {
 	return [...]string{"POST", "GET", "DELETE"}[index]
@@ -82,7 +85,6 @@ var endpointString = func(id uuid.UUID) string {
 }
 
 var handleResponse = func(response *http.Response, verb httpMethod) (*AccountApiResponse, error) {
-	defer response.Body.Close()
 	var responseWrapper AccountApiResponse
 	responseWrapper.Status = response.Status
 	responseWrapper.StatusCode = response.StatusCode
@@ -139,6 +141,7 @@ var handleDeleteResponse = func(responseWrapper AccountApiResponse, responseBody
 	}
 }
 
+// ApiError is a custom error being returned in case of an error response from form3 API.
 type ApiError struct {
 	StatusCode   int
 	Status       string
