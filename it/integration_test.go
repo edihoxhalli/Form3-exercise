@@ -1,4 +1,4 @@
-// Package it holds Integration Tests for package account.
+// Package it holds Integration (e2e) Tests for package account.
 package it
 
 import (
@@ -71,7 +71,11 @@ func newInt64Pointer(i int64) *int64 {
 	return &i
 }
 
-func TestCreate(t *testing.T) {
+func init() {
+	account.Host = "http://accountapi:8080/"
+}
+
+func TestCreateE2E(t *testing.T) {
 	upd := exp_res_created_success.ResponseBody
 	upd.Data.Version = newInt64Pointer(0)
 	exp_res_created_success.ResponseBody = upd
@@ -87,7 +91,7 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-func TestFetch(t *testing.T) {
+func TestFetchE2E(t *testing.T) {
 	upd := exp_res_fetch_success.ResponseBody
 	upd.Data.Version = newInt64Pointer(0)
 	exp_res_created_success.ResponseBody = upd
@@ -103,7 +107,7 @@ func TestFetch(t *testing.T) {
 	}
 }
 
-func TestDelete(t *testing.T) {
+func TestDeleteE2E(t *testing.T) {
 	res, err := account.Delete(uuid.MustParse(test_acc.Data.ID), 0)
 	if err != nil {
 		t.Errorf("expected nil error, got (%v)", err)
